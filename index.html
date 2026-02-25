@@ -96,7 +96,7 @@ const MainApp=({user,userRol})=>{
     const unsubs=[
       ref.collection('ejes').onSnapshot(s=>{const d=[];s.forEach(doc=>d.push({id:doc.id,...doc.data()}));setDatos(p=>({...p,ejes:d}))}),
       ref.collection('objetivos').onSnapshot(s=>{const d=[];s.forEach(doc=>d.push({id:doc.id,...doc.data()}));setDatos(p=>({...p,objetivos:d}))}),
-      ref.collection('indicadores').onSnapshot(s=>{const d=[];s.forEach(doc=>d.push({id:doc.id,...doc.data()}));setDatos(p=>({...p,indicadores:d}))}),
+      ref.collection('indicadores').get({source:'server'}).then(s=>{const d=[];s.forEach(doc=>d.push({id:doc.id,...doc.data()}));setDatos(p=>({...p,indicadores:d}));console.log('📖 Indicadores cargados desde SERVIDOR')}).catch(e=>console.error('Error cargando indicadores:',e)),
       ref.collection('seguimientos').onSnapshot(s=>{const d=[];s.forEach(doc=>d.push({id:doc.id,...doc.data()}));setDatos(p=>({...p,seguimientos:d}))}),
     ];
     return()=>unsubs.forEach(u=>u());
