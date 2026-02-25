@@ -31,8 +31,11 @@ const firebaseConfig={apiKey:"AIzaSyAudtZnoZuRtbEDJ8Am-7XgDBDsqTTdU68",authDomai
 if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth();
 const db=firebase.firestore();
-db.settings({cacheSizeBytes:firebase.firestore.CACHE_SIZE_UNLIMITED});
-db.enablePersistence({synchronizeTabs:true}).catch(()=>{console.log('Persistence ya habilitado');});
+// DESACTIVAR CACHE COMPLETAMENTE
+db.settings({
+  cacheSizeBytes:0  // Cache desactivado
+});
+console.log('⚠️ CACHE DE FIRESTORE DESACTIVADO');
 const imprimirInforme=()=>{window.print();};
 
 const migrarDatosACompartido=async(uid,prefijo)=>{
@@ -323,7 +326,7 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
       
       // Verificar que se guardó
       const verificar=await docRef.get();
-      console.log('🔍 Verificando guardado:', verificar.data());
+      const datosGuardados=verificar.data();console.log('🔍 NOMBRE guardado:', datosGuardados.nombre);console.log('🔍 META guardada:', datosGuardados.meta);console.log('🔍 METAS POR PERÍODO:', datosGuardados.metasPorPeriodo);console.log('🔍 DATOS COMPLETOS:', JSON.stringify(datosGuardados, null, 2));
       
     }else{
       console.log('➕ CREANDO nuevo');
