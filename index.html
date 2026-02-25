@@ -31,6 +31,8 @@ const firebaseConfig={apiKey:"AIzaSyAudtZnoZuRtbEDJ8Am-7XgDBDsqTTdU68",authDomai
 if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth();
 const db=firebase.firestore();
+db.settings({cacheSizeBytes:firebase.firestore.CACHE_SIZE_UNLIMITED});
+db.enablePersistence({synchronizeTabs:true}).catch(()=>{console.log('Persistence ya habilitado');});
 const imprimirInforme=()=>{window.print();};
 
 const migrarDatosACompartido=async(uid,prefijo)=>{
@@ -272,6 +274,11 @@ const VistaDashboard=({entidad,datos})=>{
 };
 const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[itemEdit,setItemEdit]=useState(null);const[loading,setLoading]=useState(false);const[modalPrint,setModalPrint]=useState(false);if(!entidad||!datos)return <div className="empty-state"><h3>Selecciona una entidad</h3></div>;const{ejes=[],objetivos=[],indicadores=[]}=datos;const ref=db.collection('coosanroque_datos').doc(entidad.id);const scoreConfig=entidad.scoreConfig||{critico:{min:0,max:60},precaucion:{min:61,max:85},optimo:{min:86,max:100}};const guardarEje=async(e)=>{e.preventDefault();setLoading(true);try{if(itemEdit){await ref.collection('ejes').doc(itemEdit.id).update(form);}else{await ref.collection('ejes').add(form);}setModal(null);setForm({});setItemEdit(null);}catch(error){alert('Error: '+error.message);}finally{setLoading(false);}};const guardarObjetivo=async(e)=>{e.preventDefault();setLoading(true);try{if(itemEdit){await ref.collection('objetivos').doc(itemEdit.id).update(form);}else{await ref.collection('objetivos').add(form);}setModal(null);setForm({});setItemEdit(null);}catch(error){alert('Error: '+error.message);}finally{setLoading(false);}};const guardarIndicador=async(e)=>{
   e.preventDefault();
+  console.log('🔵 INICIO guardarIndicador');
+  console.log('📝 Form actual:', form);
+  console.log('📝 itemEdit:', itemEdit);
+  console.log('📝 entidad:', entidad);
+  
   setLoading(true);
   try{
     const metasPorAnio={};
@@ -281,14 +288,16 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
         if(anio)metasPorAnio[anio]=parseFloat(form[`meta_${anio}`]||form.meta);
       });
     }
+    console.log('📊 metasPorAnio:', metasPorAnio);
+    
     // Extraer metas por período
     const metasPorPeriodo={};
     Object.keys(form).forEach(key=>{
       if(key.startsWith('meta_')&&key!=='meta'){
-        // Formato: meta_2025_Enero o meta_2025_bim1
         metasPorPeriodo[key]=parseFloat(form[key])||0;
       }
     });
+    console.log('📊 metasPorPeriodo:', metasPorPeriodo);
     
     const updateData={
       objetivoId:String(form.objetivoId),
@@ -297,31 +306,63 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
       periodicidad:String(form.periodicidad),
       meta:parseFloat(form.meta),
       unidad:String(form.unidad),
-      estrategia:String(form.estrategia||''),tipoMeta:String(form.tipoMeta||'independiente'),
+      estrategia:String(form.estrategia||''),
+      tipoMeta:String(form.tipoMeta||'independiente'),
       metasPorPeriodo:metasPorPeriodo,
       metasPorAnio:metasPorAnio
     };
+    console.log('📦 updateData construido:', updateData);
+    
     if(itemEdit){
+      console.log('✏️ Modo EDITAR - ID:', itemEdit.id);
       updateData.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
-      // Forzar escritura completa sin cache
-      const docRef=ref.collection('indicadores').doc(itemEdit.id);
+      
+      if(!entidad||!entidad.id){
+        throw new Error('No hay entidad seleccionada');
+      }
+      
+      const docRef=db.collection('coosanroque_datos').doc(entidad.id).collection('indicadores').doc(itemEdit.id);
+      console.log('🎯 Referencia:', docRef.path);
+      
+      console.log('🗑️ Borrando documento...');
       await docRef.delete();
+      console.log('✅ Documento borrado');
+      
+      console.log('💾 Creando documento nuevo...');
       await docRef.set(updateData);
-      console.log('✅ Indicador actualizado (borrar+crear):', updateData);
+      console.log('✅ Documento creado exitosamente');
+      
+      alert('✅ Indicador actualizado correctamente');
     }else{
-      const docRef=await ref.collection('indicadores').add(updateData);
-      console.log('✅ Indicador creado:', docRef.id, updateData);
+      console.log('➕ Modo CREAR');
+      
+      if(!entidad||!entidad.id){
+        throw new Error('No hay entidad seleccionada');
+      }
+      
+      const colRef=db.collection('coosanroque_datos').doc(entidad.id).collection('indicadores');
+      console.log('🎯 Colección:', colRef.path);
+      
+      console.log('💾 Agregando documento...');
+      const docRef=await colRef.add(updateData);
+      console.log('✅ Documento creado con ID:', docRef.id);
+      
+      alert('✅ Indicador creado correctamente');
     }
+    
     setModal(null);
     setForm({});
     setItemEdit(null);
+    console.log('🟢 FIN guardarIndicador - ÉXITO');
   }catch(error){
-    console.error('Error:',error);
-    alert('Error: '+error.message);
+    console.error('🔴 ERROR en guardarIndicador:', error);
+    console.error('Stack:', error.stack);
+    alert('❌ Error al guardar: '+error.message);
   }finally{
     setLoading(false);
   }
 };
+
 const eliminar=async(coleccion,id)=>{if(!window.confirm('¿Eliminar?'))return;try{await ref.collection(coleccion).doc(id).delete();}catch(error){alert('Error: '+error.message);}};const editarEje=(eje)=>{setItemEdit(eje);setForm({nombre:eje.nombre,color:eje.color});setModal('eje');};const editarObjetivo=(obj)=>{setItemEdit(obj);setForm({ejeId:obj.ejeId,nombre:obj.nombre});setModal('objetivo');};const editarIndicador=(ind)=>{setItemEdit(ind);const anios=ind.metasPorAnio?Object.keys(ind.metasPorAnio).join(','):'';const formData={objetivoId:ind.objetivoId,nombre:ind.nombre,tipo:ind.tipo,periodicidad:ind.periodicidad,meta:ind.meta,unidad:ind.unidad,estrategia:ind.estrategia||'',tipoMeta:ind.tipoMeta||'independiente',anios};if(ind.metasPorAnio){Object.entries(ind.metasPorAnio).forEach(([anio,meta])=>{formData[`meta_${anio}`]=meta;});}// Cargar metas por período si existen
     if(ind.metasPorPeriodo){
       Object.keys(ind.metasPorPeriodo).forEach(key=>{
