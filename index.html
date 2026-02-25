@@ -303,7 +303,7 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
     };
     if(itemEdit){
       updateData.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
-      await ref.collection('indicadores').doc(itemEdit.id).set(updateData,{merge:true});
+      await ref.collection('indicadores').doc(itemEdit.id).set(updateData);
     }else{
       await ref.collection('indicadores').add(updateData);
     }
