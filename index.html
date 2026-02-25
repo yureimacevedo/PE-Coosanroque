@@ -176,14 +176,32 @@ const VistaDashboard=({entidad,datos})=>{
     })[0];
     const ultSeg=segPeriodo||segReciente;
     let avanceCalc=ultSeg?.avance||0;
-    if(ind.tipoMeta==='acumulativa'&&segsInd.length>0){
+    if(ind.tipoMeta==='acumulativa'){
       avanceCalc=0;
-      segsInd.forEach(s=>{if(s.avance)avanceCalc+=parseFloat(s.avance);});
+      // Para acumulativos: obtener TODOS los seguimientos del año hasta el mes seleccionado
+      const todosSegs=seguimientos.filter(s=>s.indicadorId===ind.id&&String(s.anio)===String(filtroAnio));
+      const mesesOrdenLocal=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre','Semestral 1','Semestral 2','Anual'];
+      const indicesMes=mesesOrdenLocal.indexOf(filtroMes);
+      // Sumar solo los meses hasta el mes seleccionado
+      todosSegs.forEach(s=>{
+        const indiceMesSeg=mesesOrdenLocal.indexOf(s.mes);
+        if(indiceMesSeg<=indicesMes&&s.avance){
+          avanceCalc+=parseFloat(s.avance);
+        }
+      });
     }
     const obj=objetivos.find(o=>o.id===ind.objetivoId);
     const eje=ejes.find(e=>e.id===obj?.ejeId);
     return{...ind,ultimoSeguimiento:ultSeg,avanceAcum:avanceCalc,enPeriodo:!!segPeriodo,objetivo:obj,eje:eje};
-  }).filter(ind=>ind.enPeriodo);
+  }).filter(ind=>{
+    // Para independientes: solo si tiene dato en el período exacto
+    if(ind.tipoMeta!=='acumulativa')return ind.enPeriodo;
+    // Para acumulativos: si tiene cualquier dato hasta el período
+    const todosSegs=seguimientos.filter(s=>s.indicadorId===ind.id&&String(s.anio)===String(filtroAnio));
+    const mesesOrdenLocal=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre','Semestral 1','Semestral 2','Anual'];
+    const indiceMes=mesesOrdenLocal.indexOf(filtroMes);
+    return todosSegs.some(s=>mesesOrdenLocal.indexOf(s.mes)<=indiceMes);
+  });
 
   return(<div>
     <div className="page-header">
@@ -241,7 +259,7 @@ const VistaDashboard=({entidad,datos})=>{
             <td style={{fontSize:'0.8rem',color:'#6B7280',maxWidth:'120px'}}>{ind.objetivo?.nombre}</td>
             <td><strong>{ind.nombre}</strong>{!ind.enPeriodo&&s&&<span style={{fontSize:'0.7rem',color:'#9CA3AF',marginLeft:'0.3rem'}}>(último: {s.mes} {s.anio})</span>}</td>
             <td>{s?(s.metaAnual||ind.meta)+' '+(ind.unidad||''):'-'}</td>
-            <td>{s?ind.avanceAcum+' '+(ind.unidad||''):'-'}</td>
+            <td>{s?<div><div><strong>{ind.avanceAcum.toFixed(2)}</strong> {ind.unidad||''}</div>{ind.tipoMeta==='acumulativa'&&<div style={{fontSize:'0.7rem',color:'#6B7280'}}>📈 Acumulado</div>}</div>:'-'}</td>
             <td>{s?<strong>{(s.rendimiento||0).toFixed(1)}%</strong>:'-'}</td>
             <td>{s?<span style={{padding:'0.2rem 0.5rem',borderRadius:'6px',fontSize:'0.8rem',fontWeight:700,background:sc.bg,color:sc.c}}>{sc.icon} {s.score==='optimo'?'Óptimo':s.score==='precaucion'?'Precaución':s.score==='critico'?'Crítico':'Sin meta'}</span>:'-'}</td>
           </tr>);
@@ -263,6 +281,15 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
         if(anio)metasPorAnio[anio]=parseFloat(form[`meta_${anio}`]||form.meta);
       });
     }
+    // Extraer metas por período
+    const metasPorPeriodo={};
+    Object.keys(form).forEach(key=>{
+      if(key.startsWith('meta_')&&key!=='meta'){
+        // Formato: meta_2025_Enero o meta_2025_bim1
+        metasPorPeriodo[key]=parseFloat(form[key])||0;
+      }
+    });
+    
     const updateData={
       objetivoId:String(form.objetivoId),
       nombre:String(form.nombre),
@@ -271,6 +298,7 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
       meta:parseFloat(form.meta),
       unidad:String(form.unidad),
       estrategia:String(form.estrategia||''),tipoMeta:String(form.tipoMeta||'independiente'),
+      metasPorPeriodo:metasPorPeriodo,
       metasPorAnio:metasPorAnio
     };
     if(itemEdit){
@@ -289,7 +317,68 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{const[modal,setModal]=useStat
     setLoading(false);
   }
 };
-const eliminar=async(coleccion,id)=>{if(!window.confirm('¿Eliminar?'))return;try{await ref.collection(coleccion).doc(id).delete();}catch(error){alert('Error: '+error.message);}};const editarEje=(eje)=>{setItemEdit(eje);setForm({nombre:eje.nombre,color:eje.color});setModal('eje');};const editarObjetivo=(obj)=>{setItemEdit(obj);setForm({ejeId:obj.ejeId,nombre:obj.nombre});setModal('objetivo');};const editarIndicador=(ind)=>{setItemEdit(ind);const anios=ind.metasPorAnio?Object.keys(ind.metasPorAnio).join(','):'';const formData={objetivoId:ind.objetivoId,nombre:ind.nombre,tipo:ind.tipo,periodicidad:ind.periodicidad,meta:ind.meta,unidad:ind.unidad,estrategia:ind.estrategia||'',tipoMeta:ind.tipoMeta||'independiente',anios};if(ind.metasPorAnio){Object.entries(ind.metasPorAnio).forEach(([anio,meta])=>{formData[`meta_${anio}`]=meta;});}setForm(formData);setModal('indicador');};return(<div><div className="page-header"><h1>Planeación - {entidad.nombre}</h1><button className="btn-primary" onClick={()=>setModalPrint(true)} style={{width:'auto'}}>🖨️ Imprimir</button></div><div className="card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}><h3>Ejes Estratégicos ({ejes.length})</h3><button className="btn-primary" style={{width:'auto'}} onClick={()=>{setItemEdit(null);setForm({nombre:'',color:'#4F46E5'});setModal('eje');}}>+ Nuevo Eje</button></div>{ejes.length===0?<p style={{color:'#6B7280'}}>No hay ejes</p>:<div className="grid">{ejes.map(eje=>(<div key={eje.id} className="card" style={{borderLeft:`4px solid ${eje.color}`}}><h4>{eje.nombre}</h4><div className="btn-group"><button className="btn-edit" onClick={()=>editarEje(eje)}>✏️ Editar</button><button className="btn-secondary" onClick={()=>eliminar('ejes',eje.id)}>🗑️ Eliminar</button></div></div>))}</div>}</div><div className="card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}><h3>Objetivos ({objetivos.length})</h3><button className="btn-primary" style={{width:'auto'}} onClick={()=>{setItemEdit(null);setForm({ejeId:'',nombre:''});setModal('objetivo');}} disabled={ejes.length===0}>+ Nuevo Objetivo</button></div>{objetivos.length===0?<p style={{color:'#6B7280'}}>No hay objetivos</p>:objetivos.map(obj=>{const eje=ejes.find(e=>e.id===obj.ejeId);return(<div key={obj.id} className="card" style={{borderLeft:`4px solid ${eje?.color||'#6B7280'}`}}><div className="badge" style={{background:eje?.color,color:'white',marginBottom:'0.5rem'}}>{eje?.nombre||'Sin eje'}</div><p>{obj.nombre}</p><div className="btn-group"><button className="btn-edit" onClick={()=>editarObjetivo(obj)}>✏️ Editar</button><button className="btn-secondary" onClick={()=>eliminar('objetivos',obj.id)}>🗑️ Eliminar</button></div></div>);})}</div><div className="card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}><h3>Indicadores ({indicadores.length})</h3><button className="btn-primary" style={{width:'auto'}} onClick={()=>{setItemEdit(null);setForm({objetivoId:'',nombre:'',tipo:'ascendente',periodicidad:'Mensual',meta:'',unidad:'%',estrategia:'',anios:''});setModal('indicador');}} disabled={objetivos.length===0}>+ Nuevo Indicador</button></div>{indicadores.length===0?<p style={{color:'#6B7280'}}>No hay indicadores</p>:<div className="grid">{indicadores.map(ind=>{const obj=objetivos.find(o=>o.id===ind.objetivoId);const eje=ejes.find(e=>e.id===obj?.ejeId);return(<div key={ind.id} className="card" style={{borderLeft:`4px solid ${eje?.color||'#6B7280'}`}}><div className="badge" style={{background:eje?.color,color:'white',marginBottom:'0.5rem'}}>{eje?.nombre}</div><h4>{ind.nombre}</h4><p style={{color:'#6B7280',fontSize:'0.875rem',marginTop:'0.5rem'}}>Meta: {ind.meta} {ind.unidad} | {ind.tipo==='ascendente'?'📈':'📉'}</p>{ind.metasPorAnio&&Object.keys(ind.metasPorAnio).length>0&&(<p style={{color:'#4F46E5',fontSize:'0.75rem',marginTop:'0.25rem'}}>Metas: {Object.entries(ind.metasPorAnio).map(([a,m])=>`${a}:${m}`).join(', ')}</p>)}<div className="btn-group"><button className="btn-edit" onClick={()=>editarIndicador(ind)}>✏️ Editar</button><button className="btn-secondary" onClick={()=>eliminar('indicadores',ind.id)}>🗑️ Eliminar</button></div></div>);})}</div>}</div>{modal==='eje'&&(<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><h2>{itemEdit?'Editar':'Nuevo'} Eje</h2><button className="btn-cerrar" onClick={()=>setModal(null)}>×</button></div><div className="modal-body"><form onSubmit={guardarEje}><div className="form-group"><label>Nombre *</label><input type="text" value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} required/></div><div className="form-group"><label>Color</label><input type="color" value={form.color} onChange={e=>setForm({...form,color:e.target.value})}/></div><button type="submit" className="btn-primary" disabled={loading}>{loading?'⏳...':'💾 Guardar'}</button></form></div></div></div>)}{modal==='objetivo'&&(<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><h2>{itemEdit?'Editar':'Nuevo'} Objetivo</h2><button className="btn-cerrar" onClick={()=>setModal(null)}>×</button></div><div className="modal-body"><form onSubmit={guardarObjetivo}><div className="form-group"><label>Eje *</label><select value={form.ejeId} onChange={e=>setForm({...form,ejeId:e.target.value})} required><option value="">Seleccionar...</option>{ejes.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}</select></div><div className="form-group"><label>Nombre *</label><textarea value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} required rows={3}/></div><button type="submit" className="btn-primary" disabled={loading}>{loading?'⏳...':'💾 Guardar'}</button></form></div></div></div>)}{modal==='indicador'&&(<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><h2>{itemEdit?'Editar':'Nuevo'} Indicador</h2><button className="btn-cerrar" onClick={()=>setModal(null)}>×</button></div><div className="modal-body"><form onSubmit={guardarIndicador}><div className="form-group"><label>Objetivo *</label><select value={form.objetivoId} onChange={e=>setForm({...form,objetivoId:e.target.value})} required><option value="">Seleccionar...</option>{objetivos.map(obj=>{const eje=ejes.find(e=>e.id===obj.ejeId);return<option key={obj.id} value={obj.id}>[{eje?.nombre}] {obj.nombre}</option>;})}</select></div><div className="form-group"><label>Nombre *</label><input type="text" value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} required/></div><div className="form-row"><div className="form-group"><label>Tipo *</label><select value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})} required><option value="ascendente">📈 Ascendente</option><option value="descendente">📉 Descendente</option></select></div><div className="form-group"><label>Periodicidad *</label><select value={form.periodicidad} onChange={e=>setForm({...form,periodicidad:e.target.value})} required><option value="Mensual">Mensual</option><option value="Bimestral">Bimestral</option><option value="Trimestral">Trimestral</option><option value="Cuatrimestral">Cuatrimestral</option><option value="Anual">Anual</option></select></div><div className="form-group"><label>Tipo de Meta</label><select value={form.tipoMeta||'independiente'} onChange={e=>setForm({...form,tipoMeta:e.target.value})}><option value="independiente">Independiente</option><option value="acumulativa">Acumulativa</option></select></div></div><div className="form-row"><div className="form-group"><label>Meta Base *</label><input type="number" step="0.01" value={form.meta} onChange={e=>setForm({...form,meta:e.target.value})} required/></div><div className="form-group"><label>Unidad *</label><input type="text" value={form.unidad} onChange={e=>setForm({...form,unidad:e.target.value})} required placeholder="%"/></div></div><div className="form-group"><label>Años con Metas Específicas</label><input type="text" value={form.anios} onChange={e=>setForm({...form,anios:e.target.value})} placeholder="2025,2026,2027"/><small style={{color:'#6B7280',display:'block',marginTop:'0.25rem'}}>Separados por coma</small></div>{form.anios&&form.anios.split(',').map(a=>{const anio=a.trim();if(!anio)return null;return(<div key={anio} className="form-group"><label>Meta para {anio}</label><input type="number" step="0.01" value={form[`meta_${anio}`]||form.meta} onChange={e=>setForm({...form,[`meta_${anio}`]:e.target.value})}/></div>);})}<div className="form-group"><label>Estrategia</label><textarea value={form.estrategia} onChange={e=>setForm({...form,estrategia:e.target.value})} rows={3}/></div><button type="submit" className="btn-primary" disabled={loading}>{loading?'⏳...':'💾 Guardar'}</button></form></div></div></div>)}
+const eliminar=async(coleccion,id)=>{if(!window.confirm('¿Eliminar?'))return;try{await ref.collection(coleccion).doc(id).delete();}catch(error){alert('Error: '+error.message);}};const editarEje=(eje)=>{setItemEdit(eje);setForm({nombre:eje.nombre,color:eje.color});setModal('eje');};const editarObjetivo=(obj)=>{setItemEdit(obj);setForm({ejeId:obj.ejeId,nombre:obj.nombre});setModal('objetivo');};const editarIndicador=(ind)=>{setItemEdit(ind);const anios=ind.metasPorAnio?Object.keys(ind.metasPorAnio).join(','):'';const formData={objetivoId:ind.objetivoId,nombre:ind.nombre,tipo:ind.tipo,periodicidad:ind.periodicidad,meta:ind.meta,unidad:ind.unidad,estrategia:ind.estrategia||'',tipoMeta:ind.tipoMeta||'independiente',anios};if(ind.metasPorAnio){Object.entries(ind.metasPorAnio).forEach(([anio,meta])=>{formData[`meta_${anio}`]=meta;});}// Cargar metas por período si existen
+    if(ind.metasPorPeriodo){
+      Object.keys(ind.metasPorPeriodo).forEach(key=>{
+        formData[key]=ind.metasPorPeriodo[key];
+      });
+    }
+    setForm(formData);setModal('indicador');};return(<div><div className="page-header"><h1>Planeación - {entidad.nombre}</h1><button className="btn-primary" onClick={()=>setModalPrint(true)} style={{width:'auto'}}>🖨️ Imprimir</button></div><div className="card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}><h3>Ejes Estratégicos ({ejes.length})</h3><button className="btn-primary" style={{width:'auto'}} onClick={()=>{setItemEdit(null);setForm({nombre:'',color:'#4F46E5'});setModal('eje');}}>+ Nuevo Eje</button></div>{ejes.length===0?<p style={{color:'#6B7280'}}>No hay ejes</p>:<div className="grid">{ejes.map(eje=>(<div key={eje.id} className="card" style={{borderLeft:`4px solid ${eje.color}`}}><h4>{eje.nombre}</h4><div className="btn-group"><button className="btn-edit" onClick={()=>editarEje(eje)}>✏️ Editar</button><button className="btn-secondary" onClick={()=>eliminar('ejes',eje.id)}>🗑️ Eliminar</button></div></div>))}</div>}</div><div className="card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}><h3>Objetivos ({objetivos.length})</h3><button className="btn-primary" style={{width:'auto'}} onClick={()=>{setItemEdit(null);setForm({ejeId:'',nombre:''});setModal('objetivo');}} disabled={ejes.length===0}>+ Nuevo Objetivo</button></div>{objetivos.length===0?<p style={{color:'#6B7280'}}>No hay objetivos</p>:objetivos.map(obj=>{const eje=ejes.find(e=>e.id===obj.ejeId);return(<div key={obj.id} className="card" style={{borderLeft:`4px solid ${eje?.color||'#6B7280'}`}}><div className="badge" style={{background:eje?.color,color:'white',marginBottom:'0.5rem'}}>{eje?.nombre||'Sin eje'}</div><p>{obj.nombre}</p><div className="btn-group"><button className="btn-edit" onClick={()=>editarObjetivo(obj)}>✏️ Editar</button><button className="btn-secondary" onClick={()=>eliminar('objetivos',obj.id)}>🗑️ Eliminar</button></div></div>);})}</div><div className="card"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}><h3>Indicadores ({indicadores.length})</h3><button className="btn-primary" style={{width:'auto'}} onClick={()=>{setItemEdit(null);setForm({objetivoId:'',nombre:'',tipo:'ascendente',periodicidad:'Mensual',meta:'',unidad:'%',estrategia:'',anios:''});setModal('indicador');}} disabled={objetivos.length===0}>+ Nuevo Indicador</button></div>{indicadores.length===0?<p style={{color:'#6B7280'}}>No hay indicadores</p>:<div className="grid">{indicadores.map(ind=>{const obj=objetivos.find(o=>o.id===ind.objetivoId);const eje=ejes.find(e=>e.id===obj?.ejeId);return(<div key={ind.id} className="card" style={{borderLeft:`4px solid ${eje?.color||'#6B7280'}`}}><div className="badge" style={{background:eje?.color,color:'white',marginBottom:'0.5rem'}}>{eje?.nombre}</div><h4>{ind.nombre}</h4><p style={{color:'#6B7280',fontSize:'0.875rem',marginTop:'0.5rem'}}>Meta: {ind.meta} {ind.unidad} | {ind.tipo==='ascendente'?'📈':'📉'}</p>{ind.metasPorAnio&&Object.keys(ind.metasPorAnio).length>0&&(<p style={{color:'#4F46E5',fontSize:'0.75rem',marginTop:'0.25rem'}}>Metas: {Object.entries(ind.metasPorAnio).map(([a,m])=>`${a}:${m}`).join(', ')}</p>)}<div className="btn-group"><button className="btn-edit" onClick={()=>editarIndicador(ind)}>✏️ Editar</button><button className="btn-secondary" onClick={()=>eliminar('indicadores',ind.id)}>🗑️ Eliminar</button></div></div>);})}</div>}</div>{modal==='eje'&&(<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><h2>{itemEdit?'Editar':'Nuevo'} Eje</h2><button className="btn-cerrar" onClick={()=>setModal(null)}>×</button></div><div className="modal-body"><form onSubmit={guardarEje}><div className="form-group"><label>Nombre *</label><input type="text" value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} required/></div><div className="form-group"><label>Color</label><input type="color" value={form.color} onChange={e=>setForm({...form,color:e.target.value})}/></div><button type="submit" className="btn-primary" disabled={loading}>{loading?'⏳...':'💾 Guardar'}</button></form></div></div></div>)}{modal==='objetivo'&&(<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><h2>{itemEdit?'Editar':'Nuevo'} Objetivo</h2><button className="btn-cerrar" onClick={()=>setModal(null)}>×</button></div><div className="modal-body"><form onSubmit={guardarObjetivo}><div className="form-group"><label>Eje *</label><select value={form.ejeId} onChange={e=>setForm({...form,ejeId:e.target.value})} required><option value="">Seleccionar...</option>{ejes.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}</select></div><div className="form-group"><label>Nombre *</label><textarea value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} required rows={3}/></div><button type="submit" className="btn-primary" disabled={loading}>{loading?'⏳...':'💾 Guardar'}</button></form></div></div></div>)}{modal==='indicador'&&(<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><h2>{itemEdit?'Editar':'Nuevo'} Indicador</h2><button className="btn-cerrar" onClick={()=>setModal(null)}>×</button></div><div className="modal-body"><form onSubmit={guardarIndicador}><div className="form-group"><label>Objetivo *</label><select value={form.objetivoId} onChange={e=>setForm({...form,objetivoId:e.target.value})} required><option value="">Seleccionar...</option>{objetivos.map(obj=>{const eje=ejes.find(e=>e.id===obj.ejeId);return<option key={obj.id} value={obj.id}>[{eje?.nombre}] {obj.nombre}</option>;})}</select></div><div className="form-group"><label>Nombre *</label><input type="text" value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} required/></div><div className="form-row"><div className="form-group"><label>Tipo *</label><select value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})} required><option value="ascendente">📈 Ascendente</option><option value="descendente">📉 Descendente</option></select></div><div className="form-group"><label>Periodicidad *</label><select value={form.periodicidad} onChange={e=>setForm({...form,periodicidad:e.target.value})} required><option value="Mensual">Mensual</option><option value="Bimestral">Bimestral</option><option value="Trimestral">Trimestral</option><option value="Cuatrimestral">Cuatrimestral</option><option value="Semestral">Semestral</option><option value="Anual">Anual</option></select></div>
+            
+            {/* Metas por Período según periodicidad */}
+            {form.periodicidad&&form.periodicidad!=='Anual'&&(
+              <div className="form-group" style={{gridColumn:'1/-1'}}>
+                <label>Año para definir metas *</label>
+                <select value={form.anioMetas||new Date().getFullYear()} onChange={e=>setForm({...form,anioMetas:e.target.value})} style={{maxWidth:'150px'}}>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                </select>
+                <small style={{color:'#6B7280',fontSize:'0.75rem',marginLeft:'1rem'}}>Selecciona el año para el cual defines las metas</small>
+              </div>
+            )}
+            
+            {/* Metas por Período según periodicidad */}
+            {form.periodicidad&&form.periodicidad!=='Anual'&&(
+              <div className="form-group" style={{gridColumn:'1/-1'}}>
+                <label>Metas por Período *</label>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0.5rem',marginTop:'0.5rem'}}>
+                  {form.periodicidad==='Mensual'&&['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map(mes=>(
+                    <div key={mes} style={{display:'flex',flexDirection:'column'}}>
+                      <label style={{fontSize:'0.75rem',color:'#6B7280'}}>{mes}</label>
+                      <input type="number" step="0.01" value={form[`meta_${form.anioMetas||new Date().getFullYear()}_${mes}`]||''} onChange={e=>setForm({...form,[`meta_${form.anioMetas||new Date().getFullYear()}_${mes}`]:e.target.value})} placeholder="Meta" style={{padding:'0.3rem',fontSize:'0.85rem'}}/>
+                    </div>
+                  ))}
+                  {form.periodicidad==='Bimestral'&&['Ene-Feb','Mar-Abr','May-Jun','Jul-Ago','Sep-Oct','Nov-Dic'].map((bim,i)=>(
+                    <div key={bim} style={{display:'flex',flexDirection:'column'}}>
+                      <label style={{fontSize:'0.75rem',color:'#6B7280'}}>{bim}</label>
+                      <input type="number" step="0.01" value={form[`meta_${form.anioMetas||new Date().getFullYear()}_bim${i+1}`]||''} onChange={e=>setForm({...form,[`meta_${form.anioMetas||new Date().getFullYear()}_bim${i+1}`]:e.target.value})} placeholder="Meta" style={{padding:'0.3rem',fontSize:'0.85rem'}}/>
+                    </div>
+                  ))}
+                  {form.periodicidad==='Trimestral'&&['Trim 1','Trim 2','Trim 3','Trim 4'].map((trim,i)=>(
+                    <div key={trim} style={{display:'flex',flexDirection:'column'}}>
+                      <label style={{fontSize:'0.75rem',color:'#6B7280'}}>{trim}</label>
+                      <input type="number" step="0.01" value={form[`meta_${form.anioMetas||new Date().getFullYear()}_trim${i+1}`]||''} onChange={e=>setForm({...form,[`meta_${form.anioMetas||new Date().getFullYear()}_trim${i+1}`]:e.target.value})} placeholder="Meta" style={{padding:'0.3rem',fontSize:'0.85rem'}}/>
+                    </div>
+                  ))}
+                  {form.periodicidad==='Cuatrimestral'&&['Cuatr 1','Cuatr 2','Cuatr 3'].map((cuatr,i)=>(
+                    <div key={cuatr} style={{display:'flex',flexDirection:'column'}}>
+                      <label style={{fontSize:'0.75rem',color:'#6B7280'}}>{cuatr}</label>
+                      <input type="number" step="0.01" value={form[`meta_${form.anioMetas||new Date().getFullYear()}_cuatr${i+1}`]||''} onChange={e=>setForm({...form,[`meta_${form.anioMetas||new Date().getFullYear()}_cuatr${i+1}`]:e.target.value})} placeholder="Meta" style={{padding:'0.3rem',fontSize:'0.85rem'}}/>
+                    </div>
+                  ))}
+                  {form.periodicidad==='Semestral'&&['Semestre 1','Semestre 2'].map((sem,i)=>(
+                    <div key={sem} style={{display:'flex',flexDirection:'column'}}>
+                      <label style={{fontSize:'0.75rem',color:'#6B7280'}}>{sem}</label>
+                      <input type="number" step="0.01" value={form[`meta_${form.anioMetas||new Date().getFullYear()}_sem${i+1}`]||''} onChange={e=>setForm({...form,[`meta_${form.anioMetas||new Date().getFullYear()}_sem${i+1}`]:e.target.value})} placeholder="Meta" style={{padding:'0.3rem',fontSize:'0.85rem'}}/>
+                    </div>
+                  ))}
+                </div>
+                <small style={{color:'#6B7280',fontSize:'0.75rem',marginTop:'0.5rem',display:'block'}}>Define la meta para cada período. La suma total debe coincidir con la meta anual.</small>
+              </div>
+            )}<div className="form-group"><label>Tipo de Meta</label><select value={form.tipoMeta||'independiente'} onChange={e=>setForm({...form,tipoMeta:e.target.value})}><option value="independiente">Independiente</option><option value="acumulativa">Acumulativa</option></select></div></div><div className="form-row"><div className="form-group"><label>Meta Base *</label><input type="number" step="0.01" value={form.meta} onChange={e=>setForm({...form,meta:e.target.value})} required/></div><div className="form-group"><label>Unidad *</label><input type="text" value={form.unidad} onChange={e=>setForm({...form,unidad:e.target.value})} required placeholder="%"/></div></div><div className="form-group"><label>Años con Metas Específicas</label><input type="text" value={form.anios} onChange={e=>setForm({...form,anios:e.target.value})} placeholder="2025,2026,2027"/><small style={{color:'#6B7280',display:'block',marginTop:'0.25rem'}}>Separados por coma</small></div>{form.anios&&form.anios.split(',').map(a=>{const anio=a.trim();if(!anio)return null;return(<div key={anio} className="form-group"><label>Meta para {anio}</label><input type="number" step="0.01" value={form[`meta_${anio}`]||form.meta} onChange={e=>setForm({...form,[`meta_${anio}`]:e.target.value})}/></div>);})}<div className="form-group"><label>Estrategia</label><textarea value={form.estrategia} onChange={e=>setForm({...form,estrategia:e.target.value})} rows={3}/></div><button type="submit" className="btn-primary" disabled={loading}>{loading?'⏳...':'💾 Guardar'}</button></form></div></div></div>)}
     {modalPrint&&<ModalImpresionPlaneacion entidad={entidad} datos={datos} onClose={()=>setModalPrint(false)}/>}
   </div>);};
 const VistaPlanOperativo=({user,entidad,datos,isAdmin})=>{
@@ -802,7 +891,18 @@ const VistaSeguimiento=({user,entidad,datos})=>{
     <div className="page-header">
       <h1>📋 Seguimiento de Indicadores</h1>
       {indicadorSel&&<button className="btn-primary" style={{width:'auto'}}
-        onClick={()=>{setSegEdit(null);setForm({mes:meses[new Date().getMonth()],anio:new Date().getFullYear().toString(),avance:'',metaMes:'',metaAnual:indicador?.meta||'',observaciones:''});setModal(true);}}>
+        onClick={()=>{setSegEdit(null);// Determinar mes y año según contexto
+        // Si viene del Dashboard con filtro, usar ese mes/año
+        // Si no, usar mes/año actual
+        const mesActual=meses[new Date().getMonth()];
+        const anioActual=new Date().getFullYear().toString();
+        
+        let metaCalc=0;
+        if(indicador&&indicador.metasPorPeriodo){
+          const key='meta_'+anioActual+'_'+mesActual;
+          metaCalc=indicador.metasPorPeriodo[key]||0;
+        }
+        setForm({mes:mesActual,anio:anioActual,avance:'',metaMes:metaCalc,metaAnual:indicador?.meta||'',observaciones:''});setModal(true);}}>
         + Nuevo Registro
       </button>}
     </div>
@@ -887,14 +987,30 @@ const VistaSeguimiento=({user,entidad,datos})=>{
             <div className="form-row">
               <div className="form-group">
                 <label>Mes *</label>
-                <select value={form.mes||''} onChange={e=>setForm({...form,mes:e.target.value})} required>
+                <select value={form.mes||''} onChange={e=>{
+                  const nuevoMes=e.target.value;
+                  let metaCalc=0;
+                  if(indicador&&indicador.metasPorPeriodo){
+                    const key='meta_'+(form.anio||new Date().getFullYear())+'_'+nuevoMes;
+                    metaCalc=indicador.metasPorPeriodo[key]||0;
+                  }
+                  setForm({...form,mes:nuevoMes,metaMes:metaCalc});
+                }} required>
                   <option value="">Seleccionar...</option>
                   {meses.map(m=><option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label>Año *</label>
-                <select value={form.anio||new Date().getFullYear()} onChange={e=>setForm({...form,anio:e.target.value})} required>
+                <select value={form.anio||new Date().getFullYear()} onChange={e=>{
+                  const nuevoAnio=e.target.value;
+                  let metaCalc=0;
+                  if(indicador&&indicador.metasPorPeriodo){
+                    const key='meta_'+nuevoAnio+'_'+(form.mes||'Enero');
+                    metaCalc=indicador.metasPorPeriodo[key]||0;
+                  }
+                  setForm({...form,anio:nuevoAnio,metaMes:metaCalc});
+                }} required>
                   {['2024','2025','2026','2027','2028'].map(a=><option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
@@ -905,8 +1021,13 @@ const VistaSeguimiento=({user,entidad,datos})=>{
                 <input type="number" value={form.metaAnual||indicador.meta||''} onChange={e=>setForm({...form,metaAnual:e.target.value})}/>
               </div>
               <div className="form-group">
-                <label>Meta del Mes ({indicador.unidad}) *</label>
-                <input type="number" value={form.metaMes||''} onChange={e=>setForm({...form,metaMes:e.target.value})} required/>
+                <label>Meta del Mes ({indicador.unidad}) * <span style={{fontSize:'0.7rem',color:'#6B7280'}}>(desde Planeación)</span></label>
+                {(!form.metaMes||form.metaMes===0)&&(
+                  <div style={{fontSize:'0.75rem',color:'#DC2626',marginTop:'0.25rem',padding:'0.5rem',background:'#FEE2E2',borderRadius:'6px'}}>
+                    ⚠️ No hay meta definida para {form.mes} {form.anio}. Ve a Planeación y define las metas por período.
+                  </div>
+                )}
+                <input type="number" value={form.metaMes||0} readOnly style={{background:'#F3F4F6',cursor:'not-allowed'}} title="Se calcula desde Planeación"/>
               </div>
             </div>
             <div className="form-group">
