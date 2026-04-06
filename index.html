@@ -97,6 +97,16 @@
   .app-footer{display:none!important}
 }
 </style>
+<!-- React, ReactDOM y Babel -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
 </head>
 <body>
 <div id="root"></div>
@@ -2257,28 +2267,12 @@ const VistaSeguimiento=({user,entidad,datos})=>{
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 
-<div class="app-footer">
-  Sistema de Planeación Estratégica © 2026 <strong>Yureima Acevedo Arango</strong> - Consultoría en Gestión Empresarial | Todos los derechos reservados
-</div>
-
-<div style="text-align:center;padding:2rem;color:#6B7280;font-size:0.875rem;border-top:1px solid #E5E7EB;margin-top:4rem">
-  <p>Desarrollado por <strong style="color:#4F46E5">Yureima Acevedo Arango</strong></p>
-  <p style="margin-top:0.5rem">© 2026 - Sistema de Gestión POA e Indicadores</p>
-</div>
-
-
-<footer style="background:#1F2937;color:white;padding:2rem;text-align:center;margin-top:4rem">
-  <div style="max-width:1200px;margin:0 auto">
-    <p style="margin:0;font-size:0.875rem">
-      © 2026 Sistema de Gestión POA e Indicadores
-    </p>
-    <p style="margin:0.5rem 0 0 0;font-size:0.875rem;color:#9CA3AF">
-      Desarrollado por <strong style="color:#4F46E5">Yureima Acevedo Arango</strong>
-    </p>
-    <p style="margin:0.5rem 0 0 0;font-size:0.75rem;color:#6B7280">
-      Propiedad intelectual protegida. Todos los derechos reservados.
-    </p>
-  </div>
+<footer style="background:#1F2937;color:white;padding:1.5rem;text-align:center">
+  <p style="margin:0;font-size:0.875rem">© 2026 Sistema de Gestión POA e Indicadores</p>
+  <p style="margin:0.5rem 0 0 0;font-size:0.875rem;color:#9CA3AF">
+    Desarrollado por <strong style="color:#4F46E5">Yureima Acevedo Arango</strong>
+  </p>
 </footer>
+
 </body>
 </html>
