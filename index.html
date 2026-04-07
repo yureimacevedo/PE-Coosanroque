@@ -258,7 +258,7 @@ const prefijo='coosanroque';
 useEffect(()=>{
 if(!entidad||!objetivoSel)return;
 const ref=db.collection(prefijo+'_datos').doc(entidad.id).collection('poa_actividades');
-const unsub=ref.where('objetivoId','==',objetivoSel).where('anio','==',anioSel).onSnapshot(s=>{
+const unsub=ref.where('anio','==',anioSel).onSnapshot(s=>{
 const d=[];s.forEach(doc=>d.push({id:doc.id,...doc.data()}));
 d.sort((a,b)=>new Date(a.fechaInicio)-new Date(b.fechaInicio));
 setActividades(d);
