@@ -370,8 +370,7 @@ const VistaDashboard=({entidad,datos})=>{
       if(a.anio!==b.anio)return parseInt(a.anio)-parseInt(b.anio);
       return mesesOrden.indexOf(a.mes)-mesesOrden.indexOf(b.mes);
     }):[];
-    const objPadre=obj?.esTactico?objetivos.find(o=>o.id===obj.objetivoPadreId):null;
-    return{...ind,ultimoSeguimiento:ultSeg,avanceAcum:avanceCalc,metaAcum:metaCalc,enPeriodo,objetivo:obj,objetivoPadre:objPadre,eje:eje,segsAnio:segsAnioOrdenados};
+    return{...ind,ultimoSeguimiento:ultSeg,avanceAcum:avanceCalc,metaAcum:metaCalc,enPeriodo,objetivo:obj,eje:eje,segsAnio:segsAnioOrdenados};
   }).filter(ind=>ind.enPeriodo||(ind.ultimoSeguimiento&&!modoAnio));
 
   return(<div>
@@ -993,7 +992,7 @@ const VistaConfig=({user,entidad,datos,isAdmin})=>{
                     <div className="btn-group"><button className="btn-edit" onClick={()=>editarObjetivo(obj)}>✏️</button><button className="btn-secondary" onClick={()=>eliminar('objetivos',obj.id)}>🗑️</button></div>
                   </div>
                 </div>
-                {tacticos.length>0&&<div style={{marginLeft:'1rem',borderLeft:'2px dashed #D70014',paddingLeft:'0.75rem'}}>
+                {tacticos.length>0&&<div style={{marginLeft:'1rem',borderLeft:'2px dashed #276AAB',paddingLeft:'0.75rem'}}>
                   {tacticos.map(tac=>(
                     <div key={tac.id} className="card" style={{borderLeft:`3px solid ${eje.color}88`,margin:0,marginBottom:'0.4rem',background:'#FFF8F8'}}>
                       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
@@ -2587,7 +2586,6 @@ const VistaSeguimiento=({user,entidad,datos,isMonitoreo,userCargo})=>{
     if(r>=scoreConfig.optimo.min)return'optimo';
     if(r>=scoreConfig.precaucion.min)return'precaucion';
     return'critico';
-  }
   };
 
   const guardar=async(e)=>{
