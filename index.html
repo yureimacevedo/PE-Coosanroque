@@ -2876,7 +2876,7 @@ const VistaSeguimiento=({user,entidad,datos,isMonitoreo,userCargo})=>{
 
   const resetPassword=async(email)=>{
     try{
-      await auth.sendPasswordResetEmail(email);
+      await auth.sendPasswordResetEmail(email,{url:'https://pe-coosanroque.yureimaacevedo.com',handleCodeInApp:false});
       setMensaje({texto:'Email de recuperacion enviado a '+email,tipo:'ok'});
       setTimeout(()=>setMensaje({texto:'',tipo:''}),5000);
     }catch(err){setMensaje({texto:'Error: '+err.message,tipo:'error'});}
